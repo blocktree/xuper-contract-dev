@@ -18,6 +18,7 @@ package xcd
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/blocktree/go-owcrypt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -162,7 +163,7 @@ func (ctx *Context) setEventLogs(logs []EventLog) error {
 }
 
 func (ctx *Context) SetInt(key string, value *big.Int) error {
-	return ctx.PutObject([]byte(key), value.Bytes())
+	return ctx.PutObject(HashKey(key), value.Bytes())
 }
 
 func (ctx *Context) SetBool(key string, value bool) error {
@@ -172,24 +173,32 @@ func (ctx *Context) SetBool(key string, value bool) error {
 	} else {
 		b = 0x00
 	}
-	return ctx.PutObject([]byte(key), []byte{b})
+	return ctx.PutObject(HashKey(key), []byte{b})
 }
 
 func (ctx *Context) SetString(key string, value string) error {
-	return ctx.PutObject([]byte(key), []byte(value))
+	return ctx.PutObject(HashKey(key), []byte(value))
 }
 
 func (ctx *Context) SetStrings(key string, value []string) error {
 	vals := strings.Join(value, "*;*")
-	return ctx.PutObject([]byte(key), []byte(vals))
+	return ctx.PutObject(HashKey(key), []byte(vals))
 }
 
 func (ctx *Context) SetBytes(key string, value []byte) error {
-	return ctx.PutObject([]byte(key), value)
+	return ctx.PutObject(HashKey(key), value)
+}
+
+func (ctx *Context) SetJSON(key string, value interface{}) error {
+	jsonData, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return ctx.PutObject(HashKey(key), jsonData)
 }
 
 func (ctx *Context) GetInt(key string, def *big.Int) *big.Int {
-	value, err := ctx.GetObject([]byte(key))
+	value, err := ctx.GetObject(HashKey(key))
 	if err != nil {
 		return def
 	}
@@ -199,7 +208,7 @@ func (ctx *Context) GetInt(key string, def *big.Int) *big.Int {
 }
 
 func (ctx *Context) GetBool(key string, def bool) bool {
-	value, err := ctx.GetObject([]byte(key))
+	value, err := ctx.GetObject(HashKey(key))
 	if err != nil {
 		return def
 	}
@@ -212,7 +221,7 @@ func (ctx *Context) GetBool(key string, def bool) bool {
 }
 
 func (ctx *Context) GetString(key string, def string) string {
-	value, err := ctx.GetObject([]byte(key))
+	value, err := ctx.GetObject(HashKey(key))
 	if err != nil {
 		return def
 	}
@@ -220,7 +229,7 @@ func (ctx *Context) GetString(key string, def string) string {
 }
 
 func (ctx *Context) GetStrings(key string, def []string) []string {
-	value, err := ctx.GetObject([]byte(key))
+	value, err := ctx.GetObject(HashKey(key))
 	if err != nil {
 		return def
 	}
@@ -228,20 +237,23 @@ func (ctx *Context) GetStrings(key string, def []string) []string {
 }
 
 func (ctx *Context) GetBytes(key string, def []byte) []byte {
-	value, err := ctx.GetObject([]byte(key))
+	value, err := ctx.GetObject(HashKey(key))
 	if err != nil {
 		return def
 	}
 	return value
 }
 
-func (ctx *Context) GetJSON(key string) *gjson.Result {
-	value, err := ctx.GetObject([]byte(key))
+func (ctx *Context) GetJSON(key string, obj interface{}) error {
+	value, err := ctx.GetObject(HashKey(key))
 	if err != nil {
 		return nil
 	}
-	result := gjson.ParseBytes(value)
-	return &result
+	return json.Unmarshal(value, obj)
+}
+
+func (ctx *Context) DeleteKey(key string) error {
+	return ctx.Context.DeleteObject(HashKey(key))
 }
 
 func (ctx *Context) ArgToInt(key string) *big.Int {
@@ -293,4 +305,8 @@ func (ctx *Context) ArgToJSON(key string) *gjson.Result {
 		return &result
 	}
 	return nil
+}
+
+func HashKey(key string) []byte {
+	return owcrypt.Hash([]byte(key), 0, owcrypt.HASH_ALG_KECCAK256)
 }
